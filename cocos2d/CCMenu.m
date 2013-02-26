@@ -207,7 +207,6 @@ enum {
 
 	selectedItem_ = [self itemForTouch:touch];
 	[selectedItem_ selected];
-    [selectedItem_ pressActivate];
 
 	if( selectedItem_ ) {
 		state_ = kCCMenuStateTrackingTouch;

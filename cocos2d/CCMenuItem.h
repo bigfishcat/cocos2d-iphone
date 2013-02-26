@@ -24,8 +24,8 @@
  *
  */
 
-#import "CCProtocols.h"
 #import "CCNode.h"
+#import "CCProtocols.h"
 
 @class CCSprite;
 @class CCSpriteFrame;
@@ -42,15 +42,14 @@
 {
 	// used for menu items using a block
 	void (^block_)(id sender);
-    void (^pressBlock_)(id sender);
-    
+
 	BOOL isEnabled_;
 	BOOL isSelected_;
 }
 
 /** returns whether or not the item is selected
- @since v0.8.2
- */
+@since v0.8.2
+*/
 @property (nonatomic,readonly) BOOL isSelected;
 
 /** Creates a CCMenuItem with a target/selector.
@@ -69,14 +68,11 @@
 
 /** Initializes a CCMenuItem with the specified block.
  The block will be "copied".
- */
+*/
 -(id) initWithBlock:(void(^)(id sender))block;
 
 /** Returns the outside box in points */
 -(CGRect) rect;
-
-/** Activate the press block only */
--(void) pressActivate;
 
 /** Activate the item */
 -(void) activate;
@@ -92,11 +88,6 @@
 
 /** Returns whether or not the CCMenuItem is enabled */
 -(BOOL) isEnabled;
-
-/** Sets the block that is called when the item is pressed.
- The block will be "copied".
- */
--(void) setPressBlock:(void (^)(id sender))block;
 
 /** Sets the block that is called when the item is tapped.
  The block will be "copied".
@@ -120,9 +111,9 @@
 /** An abstract class for "label" CCMenuItemLabel items
  Any CCNode that supports the CCLabelProtocol protocol can be added.
  Supported nodes:
- - CCLabelBMFont
- - CCLabelAtlas
- - CCLabelTTF
+   - CCLabelBMFont
+   - CCLabelAtlas
+   - CCLabelTTF
  */
 @interface CCMenuItemLabel : CCMenuItem  <CCRGBAProtocol>
 {
@@ -191,7 +182,7 @@
 +(id) itemWithString: (NSString*) value charMapFile:(NSString*) charMapFile itemWidth:(int)itemWidth itemHeight:(int)itemHeight startCharMap:(char)startCharMap target:(id)target selector:(SEL)selector;
 
 /** initializes a menu item from a string and atlas with a target/selector.
- The "target" won't be retained.
+  The "target" won't be retained.
  */
 -(id) initWithString: (NSString*) value charMapFile:(NSString*) charMapFile itemWidth:(int)itemWidth itemHeight:(int)itemHeight startCharMap:(char)startCharMap target:(id)target selector:(SEL)selector;
 
@@ -244,7 +235,7 @@
 +(id) itemWithString: (NSString*) value block:(void(^)(id sender))block;
 
 /** initializes a menu item from a string with a target/selector
- The "target" won't be retained.
+  The "target" won't be retained.
  */
 -(id) initWithString: (NSString*) value target:(id) r selector:(SEL) s;
 
@@ -275,7 +266,7 @@
  - unselected image
  - selected image
  - disabled image
- 
+
  @since v0.8.0
  */
 @interface CCMenuItemSprite : CCMenuItem <CCRGBAProtocol>
@@ -334,7 +325,7 @@
  - unselected image
  - selected image
  - disabled image
- 
+
  For best results try that all images are of the same size
  */
 @interface CCMenuItemImage : CCMenuItemSprite
@@ -359,7 +350,7 @@
 
 /** creates a menu item with a normal,selected  and disabled image with a block.
  The block will be "copied".
- */
+*/
 +(id) itemWithNormalImage: (NSString*)value selectedImage:(NSString*) value2 disabledImage:(NSString*) value3 block:(void(^)(id sender))block;
 
 /** initializes a menu item with a normal, selected  and disabled image with target/selector.
@@ -369,7 +360,7 @@
 
 /** initializes a menu item with a normal, selected  and disabled image with a block.
  The block will be "copied".
- */
+*/
 -(id) initWithNormalImage: (NSString*) value selectedImage:(NSString*)value2 disabledImage:(NSString*) value3 block:(void(^)(id sender))block;
 
 /** sets the sprite frame for the normal image */
