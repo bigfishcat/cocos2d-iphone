@@ -91,6 +91,7 @@ const NSInteger	kCCZoomActionTag = 0xc0c05002;
 -(void) dealloc
 {
 	[block_ release];
+    [pressBlock_ release];
 
 	[super dealloc];
 }
@@ -99,6 +100,8 @@ const NSInteger	kCCZoomActionTag = 0xc0c05002;
 {
 	[block_ release];
 	block_ = nil;
+    [pressBlock_ release];
+    pressBlock_ = nil;
 
 	[super cleanup];
 }
@@ -111,6 +114,12 @@ const NSInteger	kCCZoomActionTag = 0xc0c05002;
 -(void) unselected
 {
 	isSelected_ = NO;
+}
+
+-(void)pressActivate
+{
+    if(isEnabled_&& pressBlock_)
+        pressBlock_(self);
 }
 
 -(void) activate
@@ -134,6 +143,12 @@ const NSInteger	kCCZoomActionTag = 0xc0c05002;
 	return CGRectMake( position_.x - contentSize_.width*anchorPoint_.x,
 					  position_.y - contentSize_.height*anchorPoint_.y,
 					  contentSize_.width, contentSize_.height);
+}
+
+-(void) setPressBlock:(void (^)(id sender))block
+{
+    [pressBlock_ release];
+    pressBlock_ = [block copy];
 }
 
 -(void) setBlock:(void(^)(id sender))block
