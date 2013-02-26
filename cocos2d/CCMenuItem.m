@@ -1,872 +1,406 @@
-/*
- * cocos2d for iPhone: http://www.cocos2d-iphone.org
- *
- * Copyright (c) 2008-2011 Ricardo Quesada
- * Copyright (c) 2011 Zynga Inc.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *
- */
+#import "CCProtocols.h"
+#import "CCNode.h"
 
-#import "CCMenuItem.h"
-#import "CCLabelTTF.h"
-#import "CCLabelAtlas.h"
-#import "CCActionInterval.h"
-#import "CCSprite.h"
-#import "Support/CGPointExtension.h"
+@class CCSprite;
+@class CCSpriteFrame;
 
-static NSUInteger _fontSize = kCCItemSize;
-static NSString *_fontName = @"Marker Felt";
-static BOOL _fontNameRelease = NO;
-
-
-const NSInteger	kCCCurrentItemTag = 0xc0c05001;
-const NSInteger	kCCZoomActionTag = 0xc0c05002;
-
+#define kCCItemSize 32
 
 #pragma mark -
 #pragma mark CCMenuItem
-
-@implementation CCMenuItem
-
-@synthesize isSelected=isSelected_;
-+(id) itemWithTarget:(id) r selector:(SEL) s
+/** CCMenuItem base class
+ *
+ *  Subclass CCMenuItem (or any subclass) to create your custom CCMenuItem objects.
+ */
+@interface CCMenuItem : CCNode
 {
-	return [[[self alloc] initWithTarget:r selector:s] autorelease];
+	// used for menu items using a block
+	void (^block_)(id sender);
+    void (^pressBlock_)(id sender);
+    
+	BOOL isEnabled_;
+	BOOL isSelected_;
 }
 
-+(id) itemWithBlock:(void(^)(id sender))block {
-	return [[[self alloc] initWithBlock:block] autorelease];
-}
+/** returns whether or not the item is selected
+ @since v0.8.2
+ */
+@property (nonatomic,readonly) BOOL isSelected;
 
--(id) init
-{
-	return [self initWithBlock:nil];
-}
+/** Creates a CCMenuItem with a target/selector.
+ target/selector will be implemented using blocks.
+ "target" won't be retained.
+ */
++(id) itemWithTarget:(id)target selector:(SEL)selector;
 
--(id) initWithTarget:(id)target selector:(SEL)selector
-{
-	// avoid retain cycle
-	__block id t = target;
-	return [self initWithBlock:^(id sender) {
+/** Creates a CCMenuItem with the specified block.
+ The block will be "copied".
+ */
++(id) itemWithBlock:(void(^)(id sender))block;
 
-		[t performSelector:selector withObject:sender];
-	}];
+/** Initializes a CCMenuItem with a target/selector */
+-(id) initWithTarget:(id)target selector:(SEL)selector;
 
-}
+/** Initializes a CCMenuItem with the specified block.
+ The block will be "copied".
+ */
+-(id) initWithBlock:(void(^)(id sender))block;
 
+/** Returns the outside box in points */
+-(CGRect) rect;
 
-// Designated initializer
--(id) initWithBlock:(void (^)(id))block
-{
-	if((self=[super init]) ) {
+/** Activate the press block only */
+-(void) pressActivate;
 
-		if( block )
-			block_ = [block copy];
+/** Activate the item */
+-(void) activate;
 
-		anchorPoint_ = ccp(0.5f, 0.5f);
-		isEnabled_ = YES;
-		isSelected_ = NO;
+/** The item was selected (not activated), similar to "mouse-over" */
+-(void) selected;
 
-	}
-	return self;
-}
+/** The item was unselected */
+-(void) unselected;
 
--(void) dealloc
-{
-	[block_ release];
+/** Enable or disabled the CCMenuItem */
+-(void) setIsEnabled:(BOOL)enabled;
 
-	[super dealloc];
-}
+/** Returns whether or not the CCMenuItem is enabled */
+-(BOOL) isEnabled;
 
--(void) cleanup
-{
-	[block_ release];
-	block_ = nil;
+/** Sets the block that is called when the item is pressed.
+ The block will be "copied".
+ */
+-(void) setPressBlock:(void (^)(id sender))block;
 
-	[super cleanup];
-}
+/** Sets the block that is called when the item is tapped.
+ The block will be "copied".
+ */
+-(void) setBlock:(void(^)(id sender))block;
 
--(void) selected
-{
-	isSelected_ = YES;
-}
+/** Sets the target and selector that is called when the item is tapped.
+ target/selector will be implemented using blocks.
+ "target" won't be retained.
+ */
+-(void) setTarget:(id)target selector:(SEL)selector;
 
--(void) unselected
-{
-	isSelected_ = NO;
-}
-
--(void) activate
-{
-	if(isEnabled_&& block_ )
-		block_(self);
-}
-
--(void) setIsEnabled: (BOOL)enabled
-{
-    isEnabled_ = enabled;
-}
-
--(BOOL) isEnabled
-{
-    return isEnabled_;
-}
-
--(CGRect) rect
-{
-	return CGRectMake( position_.x - contentSize_.width*anchorPoint_.x,
-					  position_.y - contentSize_.height*anchorPoint_.y,
-					  contentSize_.width, contentSize_.height);
-}
-
--(void) setBlock:(void(^)(id sender))block
-{
-    [block_ release];
-    block_ = [block copy];
-}
-
--(void) setTarget:(id)target selector:(SEL)selector
-{
-    [self setBlock:^(id sender) {
-        
-		[target performSelector:selector withObject:sender];
-	}];
-}
+/** cleanup event. It will release the block and call [super cleanup] */
+-(void) cleanup;
 
 @end
-
 
 #pragma mark -
 #pragma mark CCMenuItemLabel
 
-@implementation CCMenuItemLabel
-
-@synthesize disabledColor = disabledColor_;
-
-+(id) itemWithLabel:(CCNode<CCLabelProtocol,CCRGBAProtocol>*)label
+/** An abstract class for "label" CCMenuItemLabel items
+ Any CCNode that supports the CCLabelProtocol protocol can be added.
+ Supported nodes:
+ - CCLabelBMFont
+ - CCLabelAtlas
+ - CCLabelTTF
+ */
+@interface CCMenuItemLabel : CCMenuItem  <CCRGBAProtocol>
 {
-	return [[[self alloc] initWithLabel:label block:nil] autorelease];
+	CCNode<CCLabelProtocol, CCRGBAProtocol> *label_;
+	ccColor3B	colorBackup;
+	ccColor3B	disabledColor_;
+	float		originalScale_;
 }
 
-+(id) itemWithLabel:(CCNode<CCLabelProtocol,CCRGBAProtocol>*)label target:(id)target selector:(SEL)selector
-{
-	return [[[self alloc] initWithLabel:label target:target selector:selector] autorelease];
-}
+/** the color that will be used to disable the item */
+@property (nonatomic,readwrite) ccColor3B disabledColor;
 
-+(id) itemWithLabel:(CCNode<CCLabelProtocol,CCRGBAProtocol>*)label block:(void(^)(id sender))block {
-	return [[[self alloc] initWithLabel:label block:block] autorelease];
-}
+/** Label that is rendered. It can be any CCNode that implements the CCLabelProtocol */
+@property (nonatomic,readwrite,assign) CCNode<CCLabelProtocol, CCRGBAProtocol>* label;
 
+/** creates a CCMenuItemLabel with a Label. Block will benil */
++(id) itemWithLabel:(CCNode<CCLabelProtocol,CCRGBAProtocol>*)label;
 
--(id) initWithLabel:(CCNode<CCLabelProtocol,CCRGBAProtocol>*)label target:(id)target selector:(SEL)selector
-{
-	// avoid retain cycle
-	__block id t = target;
+/** creates a CCMenuItemLabel with a Label, target and selector.
+ The "target" won't be retained.
+ */
++(id) itemWithLabel:(CCNode<CCLabelProtocol,CCRGBAProtocol>*)label target:(id)target selector:(SEL)selector;
 
-	self = [self initWithLabel:label block: ^(id sender) {
-		[t performSelector:selector withObject:sender];
-	}
-			];
-	return self;
-}
+/** creates a CCMenuItemLabel with a Label and a block to execute.
+ The block will be "copied".
+ */
++(id) itemWithLabel:(CCNode<CCLabelProtocol,CCRGBAProtocol>*)label block:(void(^)(id sender))block;
 
-//
-// Designated initializer
-//
--(id) initWithLabel:(CCNode<CCLabelProtocol,CCRGBAProtocol> *)label block:(void (^)(id))block
-{
-	if( (self=[self initWithBlock:block]) ) {
-		originalScale_ = 1;
-		colorBackup = ccWHITE;
-		disabledColor_ = ccc3( 126,126,126);
-		self.label = label;
-	}
+/** initializes a CCMenuItemLabel with a Label, target and selector.
+ Internally it will create a block that executes the target/selector.
+ The "target" won't be retained.
+ */
+-(id) initWithLabel:(CCNode<CCLabelProtocol,CCRGBAProtocol>*)label target:(id)target selector:(SEL)selector;
 
-	return self;
-}
+/** initializes a CCMenuItemLabel with a Label and a block to execute.
+ The block will be "copied".
+ This is the designated initializer.
+ */
+-(id) initWithLabel:(CCNode<CCLabelProtocol,CCRGBAProtocol>*)label block:(void(^)(id sender))block;
 
--(CCNode<CCLabelProtocol, CCRGBAProtocol>*) label
-{
-	return label_;
-}
--(void) setLabel:(CCNode<CCLabelProtocol, CCRGBAProtocol>*) label
-{
-	if( label != label_ ) {
-		[self removeChild:label_ cleanup:YES];
-		[self addChild:label];
+/** sets a new string to the inner label */
+-(void) setString:(NSString*)label;
 
-		label_ = label;
-		label_.anchorPoint = ccp(0,0);
-
-		[self setContentSize:[label_ contentSize]];
-	}
-}
-
--(void) setString:(NSString *)string
-{
-	[label_ setString:string];
-	[self setContentSize: [label_ contentSize]];
-}
-
--(void) activate {
-	if(isEnabled_) {
-		[self stopAllActions];
-
-		self.scale = originalScale_;
-
-		[super activate];
-	}
-}
-
--(void) selected
-{
-	// subclass to change the default action
-	if(isEnabled_) {
-		[super selected];
-
-		CCAction *action = [self getActionByTag:kCCZoomActionTag];
-		if( action )
-			[self stopAction:action];
-		else
-			originalScale_ = self.scale;
-
-		CCAction *zoomAction = [CCScaleTo actionWithDuration:0.1f scale:originalScale_ * 1.2f];
-		zoomAction.tag = kCCZoomActionTag;
-		[self runAction:zoomAction];
-	}
-}
-
--(void) unselected
-{
-	// subclass to change the default action
-	if(isEnabled_) {
-		[super unselected];
-		[self stopActionByTag:kCCZoomActionTag];
-		CCAction *zoomAction = [CCScaleTo actionWithDuration:0.1f scale:originalScale_];
-		zoomAction.tag = kCCZoomActionTag;
-		[self runAction:zoomAction];
-	}
-}
-
--(void) setIsEnabled: (BOOL)enabled
-{
-	if( isEnabled_ != enabled ) {
-		if(enabled == NO) {
-			colorBackup = [label_ color];
-			[label_ setColor: disabledColor_];
-		}
-		else
-			[label_ setColor:colorBackup];
-	}
-
-	[super setIsEnabled:enabled];
-}
-
-- (void) setOpacity: (GLubyte)opacity
-{
-    [label_ setOpacity:opacity];
-}
--(GLubyte) opacity
-{
-	return [label_ opacity];
-}
--(void) setColor:(ccColor3B)color
-{
-	[label_ setColor:color];
-}
--(ccColor3B) color
-{
-	return [label_ color];
-}
+/** Enable or disabled the CCMenuItemFont
+ @warning setIsEnabled changes the RGB color of the font
+ */
+-(void) setIsEnabled: (BOOL)enabled;
 @end
 
-#pragma mark  - CCMenuItemAtlasFont
+#pragma mark -
+#pragma mark CCMenuItemAtlasFont
 
-@implementation CCMenuItemAtlasFont
-
-+(id) itemWithString: (NSString*) value charMapFile:(NSString*) charMapFile itemWidth:(int)itemWidth itemHeight:(int)itemHeight startCharMap:(char)startCharMap
+/** A CCMenuItemAtlasFont
+ Helper class that creates a CCMenuItemLabel class with a CCLabelAtlas
+ */
+@interface CCMenuItemAtlasFont : CCMenuItemLabel
 {
-	return [CCMenuItemAtlasFont itemWithString:value charMapFile:charMapFile itemWidth:itemWidth itemHeight:itemHeight startCharMap:startCharMap target:nil selector:nil];
 }
 
-+(id) itemWithString: (NSString*) value charMapFile:(NSString*) charMapFile itemWidth:(int)itemWidth itemHeight:(int)itemHeight startCharMap:(char)startCharMap target:(id)target selector:(SEL)selector
-{
-	return [[[self alloc] initWithString:value charMapFile:charMapFile itemWidth:itemWidth itemHeight:itemHeight startCharMap:startCharMap target:target selector:selector] autorelease];
-}
-
-+(id) itemWithString:(NSString*)value charMapFile:(NSString*)charMapFile itemWidth:(int)itemWidth itemHeight:(int)itemHeight startCharMap:(char)startCharMap block:(void(^)(id sender))block
-{
-	return [[[self alloc] initWithString:value charMapFile:charMapFile itemWidth:itemWidth itemHeight:itemHeight startCharMap:startCharMap block:block] autorelease];
-}
-
--(id) initWithString: (NSString*) value charMapFile:(NSString*) charMapFile itemWidth:(int)itemWidth itemHeight:(int)itemHeight startCharMap:(char)startCharMap target:(id)target selector:(SEL)selector
-{
-	// avoid retain cycle
-	__block id t = target;
-
-	return [self initWithString:value charMapFile:charMapFile itemWidth:itemWidth itemHeight:itemHeight startCharMap:startCharMap block:^(id sender) {
-		[t performSelector:selector withObject:sender];
-	} ];
-}
-
-//
-// Designated initializer
-//
--(id) initWithString:(NSString*)value charMapFile:(NSString*)charMapFile itemWidth:(int)itemWidth itemHeight:(int)itemHeight startCharMap:(char)startCharMap block:(void(^)(id sender))block
-{
-	NSAssert( [value length] > 0, @"value length must be greater than 0");
-
-	CCLabelAtlas *label = [[CCLabelAtlas alloc] initWithString:value charMapFile:charMapFile itemWidth:itemWidth itemHeight:itemHeight startCharMap:startCharMap];
-
-	id ret = [self initWithLabel:label block:block];
-
-	[label release];
-
-	return ret;
-
-}
-
--(void) dealloc
-{
-	[super dealloc];
-}
-@end
-
-
-#pragma mark - CCMenuItemFont
-
-@implementation CCMenuItemFont
-
-+(void) setFontSize: (NSUInteger) s
-{
-	_fontSize = s;
-}
-
-+(NSUInteger) fontSize
-{
-	return _fontSize;
-}
-
-+(void) setFontName: (NSString*) n
-{
-	if( _fontNameRelease )
-		[_fontName release];
-
-	_fontName = [n retain];
-	_fontNameRelease = YES;
-}
-
-+(NSString*) fontName
-{
-	return _fontName;
-}
-
-+(id) itemWithString: (NSString*) value target:(id) r selector:(SEL) s
-{
-	return [[[self alloc] initWithString: value target:r selector:s] autorelease];
-}
-
-+(id) itemWithString: (NSString*) value
-{
-	return [[[self alloc] initWithString: value target:nil selector:nil] autorelease];
-}
-
-+(id) itemWithString: (NSString*) value block:(void(^)(id sender))block
-{
-	return [[[self alloc] initWithString:value block:block] autorelease];
-}
-
--(id) initWithString: (NSString*) value target:(id)target selector:(SEL)selector
-{
-	// avoid retain cycle
-	__block id t = target;
-
-	return [self initWithString:value block:^(id sender) {
-		[t performSelector:selector withObject:sender];
-	}];
-}
-
-//
-// Designated initializer
-//
--(id) initWithString: (NSString*)string block:(void(^)(id sender))block
-{
-	NSAssert( [string length] > 0, @"Value length must be greater than 0");
-
-	fontName_ = [_fontName copy];
-	fontSize_ = _fontSize;
-
-	CCLabelTTF *label = [CCLabelTTF labelWithString:string fontName:fontName_ fontSize:fontSize_];
-
-	if((self=[super initWithLabel:label block:block]) ) {
-		// do something ?
-	}
-
-	return self;
-}
-
--(void) recreateLabel
-{
-	CCLabelTTF *label = [[CCLabelTTF alloc] initWithString:[label_ string] fontName:fontName_ fontSize:fontSize_];
-	self.label = label;
-	[label release];
-}
-
--(void) setFontSize: (NSUInteger) size
-{
-	fontSize_ = size;
-	[self recreateLabel];
-}
-
--(NSUInteger) fontSize
-{
-	return fontSize_;
-}
-
--(void) setFontName: (NSString*) fontName
-{
-	if (fontName_)
-		[fontName_ release];
-
-	fontName_ = [fontName copy];
-	[self recreateLabel];
-}
-
--(NSString*) fontName
-{
-	return fontName_;
-}
-@end
-
-#pragma mark - CCMenuItemSprite
-
-@interface CCMenuItemSprite()
--(void) updateImagesVisibility;
-@end
-
-@implementation CCMenuItemSprite
-
-@synthesize normalImage=normalImage_, selectedImage=selectedImage_, disabledImage=disabledImage_;
-
-+(id) itemWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite
-{
-	return [self itemWithNormalSprite:normalSprite selectedSprite:selectedSprite disabledSprite:nil target:nil selector:nil];
-}
-
-+(id) itemWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite target:(id)target selector:(SEL)selector
-{
-	return [self itemWithNormalSprite:normalSprite selectedSprite:selectedSprite disabledSprite:nil target:target selector:selector];
-}
-
-+(id) itemWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite disabledSprite:(CCNode<CCRGBAProtocol>*)disabledSprite target:(id)target selector:(SEL)selector
-{
-	return [[[self alloc] initWithNormalSprite:normalSprite selectedSprite:selectedSprite disabledSprite:disabledSprite target:target selector:selector] autorelease];
-}
-
-+(id) itemWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite block:(void(^)(id sender))block
-{
-	return [self itemWithNormalSprite:normalSprite selectedSprite:selectedSprite disabledSprite:nil block:block];
-}
-
-+(id) itemWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite disabledSprite:(CCNode<CCRGBAProtocol>*)disabledSprite block:(void(^)(id sender))block
-{
-	return [[[self alloc] initWithNormalSprite:normalSprite selectedSprite:selectedSprite disabledSprite:disabledSprite block:block] autorelease];
-}
-
--(id) initWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite disabledSprite:(CCNode<CCRGBAProtocol>*)disabledSprite target:(id)target selector:(SEL)selector
-{
-	// avoid retain cycle
-	__block id t = target;
-
-	return [self initWithNormalSprite:normalSprite selectedSprite:selectedSprite disabledSprite:disabledSprite block:^(id sender) {
-		[t performSelector:selector withObject:sender];
-	} ];
-}
-
-//
-// Designated initializer
-//
--(id) initWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite disabledSprite:(CCNode<CCRGBAProtocol>*)disabledSprite block:(void(^)(id sender))block
-{
-	if ( (self = [super initWithBlock:block] ) ) {
-
-		self.normalImage = normalSprite;
-		self.selectedImage = selectedSprite;
-		self.disabledImage = disabledSprite;
-
-		[self setContentSize: [normalImage_ contentSize]];
-	}
-	return self;
-}
-
--(void) setNormalImage:(CCNode <CCRGBAProtocol>*)image
-{
-	if( image != normalImage_ ) {
-		image.anchorPoint = ccp(0,0);
-
-		[self removeChild:normalImage_ cleanup:YES];
-		[self addChild:image];
-
-		normalImage_ = image;
-        
-        [self setContentSize: [normalImage_ contentSize]];
-		
-		[self updateImagesVisibility];
-	}
-}
-
--(void) setSelectedImage:(CCNode <CCRGBAProtocol>*)image
-{
-	if( image != selectedImage_ ) {
-		image.anchorPoint = ccp(0,0);
-
-		[self removeChild:selectedImage_ cleanup:YES];
-		[self addChild:image];
-
-		selectedImage_ = image;
-		
-		[self updateImagesVisibility];
-	}
-}
-
--(void) setDisabledImage:(CCNode <CCRGBAProtocol>*)image
-{
-	if( image != disabledImage_ ) {
-		image.anchorPoint = ccp(0,0);
-
-		[self removeChild:disabledImage_ cleanup:YES];
-		[self addChild:image];
-
-		disabledImage_ = image;
-		
-		[self updateImagesVisibility];
-	}
-}
-
-#pragma mark CCMenuItemSprite - CCRGBAProtocol protocol
-
-- (void) setOpacity: (GLubyte)opacity
-{
-	[normalImage_ setOpacity:opacity];
-	[selectedImage_ setOpacity:opacity];
-	[disabledImage_ setOpacity:opacity];
-}
-
--(void) setColor:(ccColor3B)color
-{
-	[normalImage_ setColor:color];
-	[selectedImage_ setColor:color];
-	[disabledImage_ setColor:color];
-}
-
--(GLubyte) opacity
-{
-	return [normalImage_ opacity];
-}
-
--(ccColor3B) color
-{
-	return [normalImage_ color];
-}
-
--(void) selected
-{
-	[super selected];
-
-	if( selectedImage_ ) {
-		[normalImage_ setVisible:NO];
-		[selectedImage_ setVisible:YES];
-		[disabledImage_ setVisible:NO];
-
-	} else { // there is not selected image
-
-		[normalImage_ setVisible:YES];
-		[selectedImage_ setVisible:NO];
-		[disabledImage_ setVisible:NO];
-	}
-}
-
--(void) unselected
-{
-	[super unselected];
-	[normalImage_ setVisible:YES];
-	[selectedImage_ setVisible:NO];
-	[disabledImage_ setVisible:NO];
-}
-
--(void) setIsEnabled:(BOOL)enabled
-{
-	if( isEnabled_ != enabled ) {
-		[super setIsEnabled:enabled];
-
-		[self updateImagesVisibility];
-	}
-}
-
-
-// Helper 
--(void) updateImagesVisibility
-{
-	if( isEnabled_ ) {
-		[normalImage_ setVisible:YES];
-		[selectedImage_ setVisible:NO];
-		[disabledImage_ setVisible:NO];
-		
-	} else {
-		if( disabledImage_ ) {
-			[normalImage_ setVisible:NO];
-			[selectedImage_ setVisible:NO];
-			[disabledImage_ setVisible:YES];
-		} else {
-			[normalImage_ setVisible:YES];
-			[selectedImage_ setVisible:NO];
-			[disabledImage_ setVisible:NO];
-		}
-	}
-}
+/** creates a menu item from a string and atlas with a target/selector */
++(id) itemWithString: (NSString*) value charMapFile:(NSString*) charMapFile itemWidth:(int)itemWidth itemHeight:(int)itemHeight startCharMap:(char)startCharMap;
+
+/** creates a menu item from a string and atlas. Use it with CCMenuItemToggle.
+ The "target" won't be retained.
+ */
++(id) itemWithString: (NSString*) value charMapFile:(NSString*) charMapFile itemWidth:(int)itemWidth itemHeight:(int)itemHeight startCharMap:(char)startCharMap target:(id)target selector:(SEL)selector;
+
+/** initializes a menu item from a string and atlas with a target/selector.
+ The "target" won't be retained.
+ */
+-(id) initWithString: (NSString*) value charMapFile:(NSString*) charMapFile itemWidth:(int)itemWidth itemHeight:(int)itemHeight startCharMap:(char)startCharMap target:(id)target selector:(SEL)selector;
+
+/** creates a menu item from a string and atlas. Use it with CCMenuItemToggle.
+ The block will be "copied".
+ */
++(id) itemWithString: (NSString*) value charMapFile:(NSString*) charMapFile itemWidth:(int)itemWidth itemHeight:(int)itemHeight startCharMap:(char)startCharMap block:(void(^)(id sender))block;
+
+/** initializes a menu item from a string and atlas with a  block.
+ The block will be "copied".
+ */
+-(id) initWithString: (NSString*) value charMapFile:(NSString*) charMapFile itemWidth:(int)itemWidth itemHeight:(int)itemHeight startCharMap:(char)startCharMap block:(void(^)(id sender))block;
 
 @end
 
-#pragma mark - CCMenuItemImage
+#pragma mark -
+#pragma mark CCMenuItemFont
 
-@implementation CCMenuItemImage
-
-+(id) itemWithNormalImage: (NSString*)value selectedImage:(NSString*) value2
+/** A CCMenuItemFont
+ Helper class that creates a CCMenuItemLabel class with a Label
+ */
+@interface CCMenuItemFont : CCMenuItemLabel
 {
-	return [self itemWithNormalImage:value selectedImage:value2 disabledImage: nil target:nil selector:nil];
+	NSUInteger fontSize_;
+	NSString *fontName_;
 }
+/** set default font size */
++(void) setFontSize: (NSUInteger) s;
 
-+(id) itemWithNormalImage: (NSString*)value selectedImage:(NSString*) value2 target:(id) t selector:(SEL) s
-{
-	return [self itemWithNormalImage:value selectedImage:value2 disabledImage: nil target:t selector:s];
-}
+/** get default font size */
++(NSUInteger) fontSize;
 
-+(id) itemWithNormalImage: (NSString*)value selectedImage:(NSString*) value2 disabledImage: (NSString*) value3
-{
-	return [[[self alloc] initWithNormalImage:value selectedImage:value2 disabledImage:value3 target:nil selector:nil] autorelease];
-}
+/** set default font name */
++(void) setFontName: (NSString*) n;
 
-+(id) itemWithNormalImage: (NSString*)value selectedImage:(NSString*) value2 disabledImage: (NSString*) value3 target:(id) t selector:(SEL) s
-{
-	return [[[self alloc] initWithNormalImage:value selectedImage:value2 disabledImage:value3 target:t selector:s] autorelease];
-}
+/** get default font name */
++(NSString*) fontName;
 
-+(id) itemWithNormalImage: (NSString*)value selectedImage:(NSString*) value2 block:(void(^)(id sender))block
-{
-	return [self itemWithNormalImage:value selectedImage:value2 disabledImage:nil block:block];
-}
+/** creates a menu item from a string without target/selector. To be used with CCMenuItemToggle */
++(id) itemWithString: (NSString*) value;
 
-+(id) itemWithNormalImage: (NSString*)value selectedImage:(NSString*) value2 disabledImage:(NSString*) value3 block:(void(^)(id sender))block
-{
-	return [[[self alloc] initWithNormalImage:value selectedImage:value2 disabledImage:value3 block:block] autorelease];
-}
+/** creates a menu item from a string with a target/selector.
+ The "target" won't be retained.
+ */
++(id) itemWithString: (NSString*) value target:(id) r selector:(SEL) s;
 
--(id) initWithNormalImage: (NSString*) normalI selectedImage:(NSString*)selectedI disabledImage: (NSString*) disabledI target:(id)target selector:(SEL)selector
-{
-	// avoid retain cycle
-	__block id t = target;
+/** creates a menu item from a string with the specified block.
+ The block will be "copied".
+ */
++(id) itemWithString: (NSString*) value block:(void(^)(id sender))block;
 
-	return [self initWithNormalImage:normalI selectedImage:selectedI disabledImage:disabledI block:^(id sender) {
-		[t performSelector:selector withObject:sender];
-	}];
-}
+/** initializes a menu item from a string with a target/selector
+ The "target" won't be retained.
+ */
+-(id) initWithString: (NSString*) value target:(id) r selector:(SEL) s;
 
+/** set font size */
+-(void) setFontSize: (NSUInteger) s;
 
-//
-// Designated initializer
-//
--(id) initWithNormalImage:(NSString*)normalI selectedImage:(NSString*)selectedI disabledImage:(NSString*)disabledI block:(void(^)(id sender))block
-{
-	CCNode<CCRGBAProtocol> *normalImage = [CCSprite spriteWithFile:normalI];
-	CCNode<CCRGBAProtocol> *selectedImage = nil;
-	CCNode<CCRGBAProtocol> *disabledImage = nil;
+/** get font size */
+-(NSUInteger) fontSize;
 
-	if( selectedI )
-		selectedImage = [CCSprite spriteWithFile:selectedI];
-	if(disabledI)
-		disabledImage = [CCSprite spriteWithFile:disabledI];
+/** set the font name */
+-(void) setFontName: (NSString*) n;
 
-	return [super initWithNormalSprite:normalImage selectedSprite:selectedImage disabledSprite:disabledImage block:block];
-}
+/** get the font name */
+-(NSString*) fontName;
 
-//
-// Setter of sprite frames
-//
--(void) setNormalSpriteFrame:(CCSpriteFrame *)frame
-{
-    [self setNormalImage:[CCSprite spriteWithSpriteFrame:frame]];
-}
-
--(void) setSelectedSpriteFrame:(CCSpriteFrame *)frame
-{
-    [self setSelectedImage:[CCSprite spriteWithSpriteFrame:frame]];
-}
-
--(void) setDisabledSpriteFrame:(CCSpriteFrame *)frame
-{
-    [self setDisabledImage:[CCSprite spriteWithSpriteFrame:frame]];
-}
+/** initializes a menu item from a string with the specified block.
+ The block will be "copied".
+ */
+-(id) initWithString: (NSString*) value block:(void(^)(id sender))block;
 
 @end
 
-#pragma mark - CCMenuItemToggle
+#pragma mark -
+#pragma mark CCMenuItemSprite
 
-//
-// MenuItemToggle
-//
-@implementation CCMenuItemToggle
-
-@synthesize subItems = subItems_;
-@synthesize opacity = opacity_, color = color_;
-
-+(id) itemWithTarget: (id)t selector: (SEL)sel items: (CCMenuItem*) item, ...
+/** CCMenuItemSprite accepts CCNode<CCRGBAProtocol> objects as items.
+ The images has 3 different states:
+ - unselected image
+ - selected image
+ - disabled image
+ 
+ @since v0.8.0
+ */
+@interface CCMenuItemSprite : CCMenuItem <CCRGBAProtocol>
 {
-	va_list args;
-	va_start(args, item);
-
-	id s = [[[self alloc] initWithTarget: t selector:sel items: item vaList:args] autorelease];
-
-	va_end(args);
-	return s;
+	CCNode<CCRGBAProtocol> *normalImage_, *selectedImage_, *disabledImage_;
 }
 
-+(id) itemWithItems:(NSArray*)arrayOfItems block:(void(^)(id))block
-{
-	return [[[self alloc] initWithItems:arrayOfItems block:block] autorelease];
-}
+// weak references
 
--(id) initWithTarget:(id)target selector:(SEL)selector items:(CCMenuItem*) item vaList: (va_list) args
-{
-	NSMutableArray *array = [NSMutableArray arrayWithCapacity:2];
+/** the image used when the item is not selected */
+@property (nonatomic,readwrite,assign) CCNode<CCRGBAProtocol> *normalImage;
+/** the image used when the item is selected */
+@property (nonatomic,readwrite,assign) CCNode<CCRGBAProtocol> *selectedImage;
+/** the image used when the item is disabled */
+@property (nonatomic,readwrite,assign) CCNode<CCRGBAProtocol> *disabledImage;
 
-	int z = 0;
-	CCMenuItem *i = item;
-	while(i) {
-		z++;
-		[array addObject:i];
-		i = va_arg(args, CCMenuItem*);
-	}
+/** creates a menu item with a normal and selected image*/
++(id) itemWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite;
+/** creates a menu item with a normal and selected image with target/selector.
+ The "target" won't be retained.
+ */
++(id) itemWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite target:(id)target selector:(SEL)selector;
 
-	// avoid retain cycle
-	__block id t = target;
+/** creates a menu item with a normal,selected  and disabled image with target/selector.
+ The "target" won't be retained.
+ */
++(id) itemWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite disabledSprite:(CCNode<CCRGBAProtocol>*)disabledSprite target:(id)target selector:(SEL)selector;
 
-	return [self initWithItems:array block:^(id sender) {
-		[t performSelector:selector withObject:sender];
-	}
-			];
-}
+/** creates a menu item with a normal and selected image with a block.
+ The block will be "copied".
+ */
++(id) itemWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite block:(void(^)(id sender))block;
 
--(id) initWithItems:(NSArray*)arrayOfItems block:(void(^)(id sender))block
-{
-	if( (self=[super initWithBlock:block] ) ) {
+/** creates a menu item with a normal,selected  and disabled image with a block.
+ The block will be "copied".
+ */
++(id) itemWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite disabledSprite:(CCNode<CCRGBAProtocol>*)disabledSprite block:(void(^)(id sender))block;
 
-		self.subItems = [NSMutableArray arrayWithArray:arrayOfItems];
+/** initializes a menu item with a normal, selected  and disabled image with target/selector.
+ The "target" won't be retained.
+ */
+-(id) initWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite disabledSprite:(CCNode<CCRGBAProtocol>*)disabledSprite target:(id)target selector:(SEL)selector;
 
-		selectedIndex_ = NSUIntegerMax;
-		[self setSelectedIndex:0];
-	}
-
-	return self;
-}
-
--(void) dealloc
-{
-	[subItems_ release];
-	[super dealloc];
-}
-
--(void)setSelectedIndex:(NSUInteger)index
-{
-	if( index != selectedIndex_ ) {
-		selectedIndex_=index;
-		CCMenuItem *currentItem = (CCMenuItem*)[self getChildByTag:kCCCurrentItemTag];
-		if( currentItem )
-			[currentItem removeFromParentAndCleanup:NO];
-		
-		CCMenuItem *item = [subItems_ objectAtIndex:selectedIndex_];
-		[self addChild:item z:0 tag:kCCCurrentItemTag];
-
-		CGSize s = [item contentSize];
-		[self setContentSize: s];
-		item.position = ccp( s.width/2, s.height/2 );
-	}
-}
-
--(NSUInteger) selectedIndex
-{
-	return selectedIndex_;
-}
-
-
--(void) selected
-{
-	[super selected];
-	[[subItems_ objectAtIndex:selectedIndex_] selected];
-}
-
--(void) unselected
-{
-	[super unselected];
-	[[subItems_ objectAtIndex:selectedIndex_] unselected];
-}
-
--(void) activate
-{
-	// update index
-	if( isEnabled_ ) {
-		NSUInteger newIndex = (selectedIndex_ + 1) % [subItems_ count];
-		[self setSelectedIndex:newIndex];
-
-	}
-
-	[super activate];
-}
-
--(void) setIsEnabled: (BOOL)enabled
-{
-	if( isEnabled_ != enabled ) {
-		[super setIsEnabled:enabled];
-		for(CCMenuItem* item in subItems_)
-			[item setIsEnabled:enabled];
-	}
-}
-
--(CCMenuItem*) selectedItem
-{
-	return [subItems_ objectAtIndex:selectedIndex_];
-}
-
-#pragma mark CCMenuItemToggle - CCRGBAProtocol protocol
-
-- (void) setOpacity: (GLubyte)opacity
-{
-	opacity_ = opacity;
-	for(CCMenuItem<CCRGBAProtocol>* item in subItems_)
-		[item setOpacity:opacity];
-}
-
-- (void) setColor:(ccColor3B)color
-{
-	color_ = color;
-	for(CCMenuItem<CCRGBAProtocol>* item in subItems_)
-		[item setColor:color];
-}
+/** initializes a menu item with a normal, selected  and disabled image with a block.
+ The block will be "copied".
+ */
+-(id) initWithNormalSprite:(CCNode<CCRGBAProtocol>*)normalSprite selectedSprite:(CCNode<CCRGBAProtocol>*)selectedSprite disabledSprite:(CCNode<CCRGBAProtocol>*)disabledSprite block:(void(^)(id sender))block;
 
 @end
+
+#pragma mark -
+#pragma mark CCMenuItemImage
+
+/** CCMenuItemImage accepts images as items.
+ The images has 3 different states:
+ - unselected image
+ - selected image
+ - disabled image
+ 
+ For best results try that all images are of the same size
+ */
+@interface CCMenuItemImage : CCMenuItemSprite
+{
+}
+
+/** creates a menu item with a normal and selected image*/
++(id) itemWithNormalImage: (NSString*)value selectedImage:(NSString*) value2;
+
+/** creates a menu item with a normal and selected image with target/selector */
++(id) itemWithNormalImage: (NSString*)value selectedImage:(NSString*) value2 target:(id) r selector:(SEL) s;
+
+/** creates a menu item with a normal,selected  and disabled image with target/selector.
+ The "target" won't be retained.
+ */
++(id) itemWithNormalImage: (NSString*)value selectedImage:(NSString*) value2 disabledImage:(NSString*) value3 target:(id) r selector:(SEL) s;
+
+/** creates a menu item with a normal and selected image with a block.
+ The block will be "copied".
+ */
++(id) itemWithNormalImage: (NSString*)value selectedImage:(NSString*) value2 block:(void(^)(id sender))block;
+
+/** creates a menu item with a normal,selected  and disabled image with a block.
+ The block will be "copied".
+ */
++(id) itemWithNormalImage: (NSString*)value selectedImage:(NSString*) value2 disabledImage:(NSString*) value3 block:(void(^)(id sender))block;
+
+/** initializes a menu item with a normal, selected  and disabled image with target/selector.
+ The "target" won't be retained.
+ */
+-(id) initWithNormalImage: (NSString*) value selectedImage:(NSString*)value2 disabledImage:(NSString*) value3 target:(id) r selector:(SEL) s;
+
+/** initializes a menu item with a normal, selected  and disabled image with a block.
+ The block will be "copied".
+ */
+-(id) initWithNormalImage: (NSString*) value selectedImage:(NSString*)value2 disabledImage:(NSString*) value3 block:(void(^)(id sender))block;
+
+/** sets the sprite frame for the normal image */
+- (void) setNormalSpriteFrame:(CCSpriteFrame*)frame;
+
+/** sets the sprite frame for the selected image */
+- (void) setSelectedSpriteFrame:(CCSpriteFrame*)frame;
+
+/** sets the sprite frame for the disabled image */
+- (void) setDisabledSpriteFrame:(CCSpriteFrame*)frame;
+
+@end
+
+#pragma mark -
+#pragma mark CCMenuItemToggle
+
+/** A CCMenuItemToggle
+ A simple container class that "toggles" its inner items
+ The inner itmes can be any MenuItem
+ */
+@interface CCMenuItemToggle : CCMenuItem <CCRGBAProtocol>
+{
+	NSUInteger selectedIndex_;
+	NSMutableArray* subItems_;
+	GLubyte		opacity_;
+	ccColor3B	color_;
+}
+
+/** conforms with CCRGBAProtocol protocol */
+@property (nonatomic,readonly) GLubyte opacity;
+/** conforms with CCRGBAProtocol protocol */
+@property (nonatomic,readonly) ccColor3B color;
+
+/** returns the selected item */
+@property (nonatomic,readwrite) NSUInteger selectedIndex;
+/** NSMutableArray that contains the subitems. You can add/remove items in runtime, and you can replace the array with a new one.
+ @since v0.7.2
+ */
+@property (nonatomic,readwrite,retain) NSMutableArray *subItems;
+
+/** creates a menu item from a list of items with a target/selector */
++(id) itemWithTarget:(id)target selector:(SEL)selector items:(CCMenuItem*) item, ... NS_REQUIRES_NIL_TERMINATION;
+
+/** creates a menu item from a list of items and executes the given block when the item is selected.
+ The block will be "copied".
+ */
++(id) itemWithItems:(NSArray*)arrayOfItems block:(void(^)(id sender))block;
+
+/** initializes a menu item from a list of items with a target selector */
+-(id) initWithTarget:(id)target selector:(SEL)selector items:(CCMenuItem*) item vaList:(va_list) args;
+
+/** initializes a menu item from a list of items with a block.
+ The block will be "copied".
+ */
+-(id) initWithItems:(NSArray*)arrayOfItems block:(void (^)(id))block;
+
+/** return the selected item */
+-(CCMenuItem*) selectedItem;
+@end
+
